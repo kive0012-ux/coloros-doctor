@@ -189,6 +189,14 @@ function norm(r){
 }
 async function sh(sub){ return exec(`sh ${MODDIR}/action.sh ${sub}`); }
 
+/* 稳健解析：整体提取首个 { 到末个 } 之间的内容（兼容单行/多行/前后杂讯） */
+function parseScan(text){
+  let s=(text||"").trim();
+  const i=s.indexOf("{"), j=s.lastIndexOf("}");
+  if(i<0||j<=i) throw new Error("no json");
+  return JSON.parse(s.slice(i,j+1));
+}
+
 /* ---- 渲染 ---- */
 function chip(ok,okTxt,badTxt){return `<span class="chip ${ok?"ok":"err"}">${ok?okTxt:badTxt}</span>`;}
 function setRing(score){
@@ -218,8 +226,13 @@ async function doScan(){
     else toast("体检失败：" + (r.stderr||"未知错误").slice(0,60));
     return;
   }
-  let d; try{ d=JSON.parse(r.stdout.trim().split("\n").filter(l=>l.trim().startsWith("{")).join("")); }
-  catch(e){ toast("数据解析失败"); return; }
+  let d; try{ d=parseScan(r.stdout); }
+  catch(e){
+    toast("数据解析失败");
+    const con=$("console"), tx=$("consoleTxt");
+    con.style.display="block";
+    tx.textContent += ">> 解析异常，原始输出：\n" + (r.stdout||"(空)") + "\n" + (r.stderr||"") + "\n";
+    return; }
   lastScan=d; scanDone=true;
   setRing(d.score);
   $("scoreLabel").textContent = d.score>=90?"系统状态良好":(d.score>=60?"发现问题，建议修复":"存在明显损伤，请立即修复");

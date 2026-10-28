@@ -137,5 +137,6 @@ cat > "$TMP" <<EOF
 "anim":{"window":"$aw","transition":"$at","animator":"$ad"},
 "private_dns":"$(jesc "$pdns")"}
 EOF
-cat "$TMP" > "$SCANJSON" 2>/dev/null
-cat "$TMP"
+# 压成单行（jesc 已保证字符串内无换行），手机端 JS 解析更稳
+tr -d '\n' < "$TMP" | sed 's/[[:space:]]\{2,\}/ /g' > "$SCANJSON" 2>/dev/null
+cat "$SCANJSON"
