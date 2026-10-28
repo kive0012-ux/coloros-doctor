@@ -30,7 +30,8 @@ restored_props=0
 for d in $(find_old_modules); do
   # prop_backup.list：key=value，value 为空表示该属性原本不存在→删除注入
   if [ -f "$d/prop_backup.list" ]; then
-    while IFS= read -r ln; do
+    # || [ -n "$ln" ] ：兼容最后一行没有换行符的备份文件（否则会漏掉最后一条）
+    while IFS= read -r ln || [ -n "$ln" ]; do
       case "$ln" in *=*) k="${ln%%=*}"; v="${ln#*=}";;
                        *) continue;; esac
       case "$k" in *[!A-Za-z0-9_.]*) continue;; esac
@@ -41,7 +42,7 @@ for d in $(find_old_modules); do
   fi
   # dolby_backup.list：key=value，__EMPTY__ 表示原本不存在
   if [ -f "$d/dolby_backup.list" ]; then
-    while IFS= read -r ln; do
+    while IFS= read -r ln || [ -n "$ln" ]; do
       case "$ln" in *=*) k="${ln%%=*}"; v="${ln#*=}";;
                        *) continue;; esac
       case "$k" in *[!A-Za-z0-9_.]*) continue;; esac
@@ -55,20 +56,34 @@ done
 [ "$restored_props" -gt 0 ] && echo "#   共还原属性 $restored_props 项" || echo "#   无待还原的属性备份"
 
 # ---------- ③ 指纹/机型钉回出厂真值（防伪造残留） ----------
-step "③ 设备指纹与机型信息钉回出厂值"
-fp_fixed=0
-for k in ro.product.brand ro.product.manufacturer ro.product.model \
-         ro.product.device ro.product.board ro.build.fingerprint ro.board.first_api_level \
-         ro.build.type ro.build.tags ro.debuggable ro.secure; do
+step "③ 设备指纹钉回一加 Ace3 出厂真值（只写真值，绝不删除）"
+fp_fixed=0; fp_skip=0
+for k in $STOCK_PROP_KEYS; do
   sv=$(get_stock_value "$k")
   cur=$(getprop "$k" 2>/dev/null)
-  if [ -n "$sv" ] && [ "$cur" != "$sv" ]; then
-    rp -n "$k" "$sv" && fp_fixed=$((fp_fixed+1))
-  elif [ -z "$sv" ] && [ -n "$cur" ]; then
-    command -v resetprop >/dev/null 2>&1 && resetprop -d "$k" >/dev/null 2>&1 && fp_fixed=$((fp_fixed+1))
+  if [ -n "$sv" ]; then
+    if [ "$cur" != "$sv" ]; then rp -n "$k" "$sv" && fp_fixed=$((fp_fixed+1)); fi
+  elif [ -n "$cur" ]; then
+    # v1.0.2 关键修正：分区读不到出厂真值时，保持现状绝不删除
+    #（v1.0/v1.0.1 在此会 resetprop -d，导致指纹清空→微信退登/游戏机型白名单失效）
+    echo "#   ⚠ $k 分区无出厂真值，保持现状不改动"; fp_skip=$((fp_skip+1))
   fi
 done
-[ "$fp_fixed" -gt 0 ] && ok "指纹/机型属性已复位 $fp_fixed 项" || echo "#   指纹/机型信息本就是出厂值"
+# 白名单校验：发现设备身份被冒充为其它品牌（如 Google Pixel）立即报告
+for pair in "ro.product.brand:$STOCK_ID_BRAND" "ro.product.manufacturer:$STOCK_ID_MANUFACTURER"; do
+  pk=${pair%%:*}; want=${pair#*:}
+  cur=$(getprop "$pk" 2>/dev/null)
+  [ -n "$want" ] && [ -n "$cur" ] && [ "$cur" != "$want" ] && bad "$pk=$cur 不是一加 Ace3 出厂值($want)，请再执行一次修复"
+done
+# 型号仅提示（部分固件 Build.MODEL 为 PJE110，部分为 OnePlus Ace 3，均属正常）
+_mcur=$(getprop ro.product.model 2>/dev/null)
+if [ -n "$_mcur" ]; then
+  case "$_mcur" in
+    "$STOCK_ID_MODEL"|*"Ace 3"*) ;;
+    *) echo "#   ⚠ 机型型号为 $_mcur（非 $STOCK_ID_MODEL），若本机不是一加 Ace3 请忽略" ;;
+  esac
+fi
+[ "$fp_fixed" -gt 0 ] && ok "指纹/机型属性已钉回出厂真值 $fp_fixed 项（跳过 $fp_skip 项无法确认的）" || echo "#   指纹/机型信息与出厂一致（跳过 $fp_skip 项无法确认的）"
 
 # ---------- ④ 清除明确由旧模块注入的临时属性 ----------
 step "④ 清除明确的临时注入属性"
@@ -130,24 +145,25 @@ done
 [ "$unfrozen" = "0" ] && echo "#   无被冷冻目录"
 
 # ---------- ⑧ 恢复被禁用的系统组件（游戏助手 0 帧主修复点） ----------
-step "⑧ 恢复被禁用的系统组件"
-ena=0
+step "⑧ 核对其余被禁用组件（只核对，不改动）"
 all_disabled=$(pm list packages -d 2>/dev/null | sed 's/^package://' | sort)
-for p in $all_disabled; do
-  skip=0
-  for k in $KEEP_DISABLED; do [ "$p" = "$k" ] && skip=1; done
-  [ "$skip" = "1" ] && continue
-  if pm enable "$p" >/dev/null 2>&1; then ena=$((ena+1)); else bad "启用失败 $p"; fi
-done
-echo "#   已恢复启用 $ena 个包（出厂黑名单 $KEEP_DISABLED 保持禁用）"
-[ "$ena" -gt 0 ] && ok "被禁用组件已恢复"
+n_dis=0
+for p in $all_disabled; do n_dis=$((n_dis+1)); done
+echo "#   当前共 $n_dis 个包处于禁用状态（含出厂即禁用/用户自行禁用，一律不动）"
+echo "#   v1.0.2 修正：不再全量启用，避免误开 GMS/云服务等正常禁用包"
 
 # ---------- ⑨ 游戏助手 / HyperBoost / 云控框架专项保活 ----------
 step "⑨ 游戏助手/HyperBoost/云控框架专项修复"
 gfix=0
 for p in $GAME_PKGS $CLOUD_PKGS; do
   pkg_installed "$p" || continue
-  enable_pkg "$p" && gfix=$((gfix+1))
+  if pkg_disabled "$p"; then enable_pkg "$p" && gfix=$((gfix+1))
+  else
+    # 已启用则只确保后台放行，不做 pm enable，避免无谓改写
+    cmd deviceidle whitelist +"$p" >/dev/null 2>&1
+    am set-inactive "$p" false >/dev/null 2>&1
+    gfix=$((gfix+1))
+  fi
 done
 echo "#   已处理 $gfix 个相关包（启用+后台放行+解除待机限制）"
 # 恢复被停止的温控/性能服务
@@ -176,7 +192,7 @@ done
 # ---------- 汇总 ----------
 total=$((fixed + failed))
 cat <<EOF
-RESULT|{"fixed":$fixed,"failed":$failed,"props_restored":$restored_props,"enabled_pkgs":$ena,"quarantined":$qmoved}
+RESULT|{"fixed":$fixed,"failed":$failed,"props_restored":$restored_props,"enabled_pkgs":$gfix,"quarantined":$qmoved}
 # 修复完成：成功 $fixed 项 / 失败 $failed 项。
 # ★ 强烈建议立即重启一次：hosts 覆盖、属性层、HyperBoost 服务在重启后彻底复位。
 EOF
