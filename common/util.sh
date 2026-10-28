@@ -24,7 +24,15 @@ is_root() { [ "$(id -u 2>/dev/null)" = "0" ]; }
 # 出厂属性兜底：从出厂 build.prop 读真实值
 get_stock_value() {
   _k="$1"
-  for _f in /system/build.prop /vendor/build.prop /system_ext/build.prop /product/build.prop /odm/build.prop /vendor/odm/etc/build.prop; do
+  # ColorOS/一加：真值通常在 my_manifest/my_product/my_region 等分区
+  for _f in /system/build.prop /vendor/build.prop /system_ext/build.prop /product/build.prop \
+            /odm/build.prop /odm/etc/build.prop /vendor/odm/etc/build.prop \
+            /my_manifest/build.prop /my_manifest/etc/build.prop \
+            /my_product/build.prop /my_product/etc/build.prop \
+            /my_region/etc/build.prop /my_carrier/etc/build.prop \
+            /my_bigball/build.prop /my_company/etc/build.prop \
+            /my_preload/etc/build.prop /my_engineering/etc/build.prop \
+            /system/system_ext/build.prop; do
     [ -f "$_f" ] || continue
     _v=$(grep "^$_k=" "$_f" 2>/dev/null | head -n1 | cut -d= -f2-)
     [ -n "$_v" ] && { echo "$_v"; return 0; }
