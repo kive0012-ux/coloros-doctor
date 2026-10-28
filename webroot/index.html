@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ColorOS 系统体检修复</title>
+<style>
+:root{
+  --bg:#0b0e14; --card:rgba(255,255,255,.045); --card-br:rgba(255,255,255,.08);
+  --tx:#e8ecf4; --tx2:#8b93a7; --ok:#2ecc8f; --warn:#ffb020; --err:#ff5d5d;
+  --acc1:#22d3ee; --acc2:#818cf8; --grad:linear-gradient(135deg,#22d3ee,#818cf8);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--tx);font-family:-apple-system,"HarmonyOS Sans SC","MiSans",sans-serif;
+  min-height:100vh;padding-bottom:96px;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;
+  background:radial-gradient(600px 300px at 85% -5%,rgba(129,140,248,.16),transparent),
+             radial-gradient(500px 260px at -10% 15%,rgba(34,211,238,.12),transparent)}
+.wrap{max-width:520px;margin:0 auto;padding:20px 16px}
+header{text-align:center;padding:14px 0 6px}
+.logo{width:64px;height:64px;border-radius:20px;background:var(--grad);margin:0 auto 12px;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(34,211,238,.35)}
+.logo svg{width:36px;height:36px;stroke:#fff}
+h1{font-size:20px;font-weight:700;letter-spacing:.5px}
+.sub{color:var(--tx2);font-size:12px;margin-top:4px}
+/* 分数环 */
+.score-card{margin-top:18px;background:var(--card);border:1px solid var(--card-br);border-radius:22px;
+  padding:22px;text-align:center;backdrop-filter:blur(14px)}
+.ring-wrap{position:relative;width:150px;height:150px;margin:0 auto}
+.ring-wrap svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:rgba(255,255,255,.07);stroke-width:11}
+.ring-fg{fill:none;stroke:url(#gr);stroke-width:11;stroke-linecap:round;transition:stroke-dashoffset 1s ease}
+.score-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score-num b{font-size:40px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.score-num span{font-size:11px;color:var(--tx2);margin-top:2px}
+.score-label{margin-top:10px;font-size:14px;font-weight:600}
+/* 分类卡 */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.card{background:var(--card);border:1px solid var(--card-br);border-radius:18px;padding:14px;
+  backdrop-filter:blur(14px);transition:transform .15s}
+.card:active{transform:scale(.97)}
+.card .ic{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:9px;font-size:17px}
+.card h3{font-size:13px;font-weight:600;margin-bottom:4px}
+.card p{font-size:11px;color:var(--tx2);line-height:1.45}
+.chip{display:inline-block;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:600;margin-top:7px}
+.chip.ok{background:rgba(46,204,143,.14);color:var(--ok)}
+.chip.warn{background:rgba(255,176,32,.14);color:var(--warn)}
+.chip.err{background:rgba(255,93,93,.14);color:var(--err)}
+/* 明细区 */
+.detail{background:var(--card);border:1px solid var(--card-br);border-radius:18px;margin-top:14px;
+  padding:16px;backdrop-filter:blur(14px)}
+.detail h2{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.detail h2 .dot{width:7px;height:7px;border-radius:50%;background:var(--grad)}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:10px 12px}
+.item .nm{font-size:12.5px;word-break:break-all}
+.item .st{flex-shrink:0}
+.item .st .chip{margin:0}
+.hint{font-size:11px;color:var(--tx2);line-height:1.6;margin-top:10px}
+/* 按钮 */
+.btns{display:flex;gap:10px;margin-top:16px}
+.btn{flex:1;border:none;border-radius:15px;padding:14px 0;font-size:14.5px;font-weight:700;color:#fff;
+  cursor:pointer;transition:transform .15s,opacity .2s;font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45}
+.btn.primary{background:var(--grad);box-shadow:0 6px 24px rgba(34,211,238,.3)}
+.btn.ghost{background:rgba(255,255,255,.06);border:1px solid var(--card-br);color:var(--tx)}
+/* 控制台 */
+.console{margin-top:14px;background:#070a10;border:1px solid var(--card-br);border-radius:16px;
+  padding:14px;max-height:260px;overflow-y:auto;display:none}
+.console pre{font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#9fe8c8}
+.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:rgba(20,24,34,.95);border:1px solid var(--card-br);padding:10px 20px;border-radius:99px;
+  font-size:13px;transition:.3s;z-index:99;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+footer{text-align:center;color:var(--tx2);font-size:10.5px;margin-top:22px;line-height:1.7}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;
+  border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<svg width="0" height="0"><defs><linearGradient id="gr" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs></svg>
+
+<div class="wrap">
+  <header>
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.7 6.3a4.5 4.5 0 0 0-6.4 6.4l-5.6 5.6a2 2 0 1 0 2.9 2.9l5.6-5.6a4.5 4.5 0 0 0 6.4-6.4l-2.9 2.9-2.1-2.1 2.1-2.9z" stroke="#fff" fill="none"/></svg></div>
+    <h1>ColorOS 系统体检修复</h1>
+    <div class="sub" id="ver">v1.0 · 只诊断修复 · 自身零系统修改</div>
+  </header>
+
+  <!-- 健康分 -->
+  <div class="score-card">
+    <div class="ring-wrap">
+      <svg width="150" height="150">
+        <circle class="ring-bg" cx="75" cy="75" r="64"/>
+        <circle class="ring-fg" id="ring" cx="75" cy="75" r="64" stroke-dasharray="402" stroke-dashoffset="402"/>
+      </svg>
+      <div class="score-num"><b id="score">--</b><span>系统健康分</span></div>
+    </div>
+    <div class="score-label" id="scoreLabel">点击下方「开始体检」</div>
+  </div>
+
+  <!-- 分类卡片 -->
+  <div class="grid">
+    <div class="card" onclick="jump('dApps')">
+      <div class="ic" style="background:rgba(34,211,238,.14)">🧩</div>
+      <h3>被禁用组件</h3><p>游戏助手 0 帧 / 功能失效的主因</p>
+      <span class="chip warn" id="cApps">未检测</span>
+    </div>
+    <div class="card" onclick="jump('dProps')">
+      <div class="ic" style="background:rgba(129,140,248,.16)">⚙️</div>
+      <h3>属性残留</h3><p>注入属性 / 伪造指纹 / 假机型</p>
+      <span class="chip warn" id="cProps">未检测</span>
+    </div>
+    <div class="card" onclick="jump('dNet')">
+      <div class="ic" style="background:rgba(46,204,143,.14)">🌐</div>
+      <h3>网络与 hosts</h3><p>域名屏蔽残留 / 冷冻目录</p>
+      <span class="chip warn" id="cNet">未检测</span>
+    </div>
+    <div class="card" onclick="jump('dOld')">
+      <div class="ic" style="background:rgba(255,176,32,.14)">🧹</div>
+      <h3>旧模块与进程</h3><p>残留看门狗 / 旧优化模块</p>
+      <span class="chip warn" id="cOld">未检测</span>
+    </div>
+  </div>
+
+  <!-- 明细 -->
+  <div class="detail" id="dApps" style="display:none">
+    <h2><span class="dot"></span>被禁用的系统组件</h2>
+    <div class="list" id="listApps"></div>
+    <div class="hint">修复会重新启用以上组件（出厂默认禁用的彩蛋/CTS 组件除外）。游戏助手 0 帧通常就是它被旧版本模块禁用导致的。</div>
+  </div>
+  <div class="detail" id="dProps" style="display:none">
+    <h2><span class="dot"></span>系统属性与指纹</h2>
+    <div class="list" id="listProps"></div>
+    <div class="hint">修复按旧模块留下的备份清单精确还原原值；指纹/机型一律钉回出厂 build.prop 真值，不会臆造。</div>
+  </div>
+  <div class="detail" id="dNet" style="display:none">
+    <h2><span class="dot"></span>网络与 hosts</h2>
+    <div class="list" id="listNet"></div>
+    <div class="hint">恢复原版 hosts（仅 localhost）、解冻被只读挂载冷冻的云控目录；两者都不影响推送。</div>
+  </div>
+  <div class="detail" id="dOld" style="display:none">
+    <h2><span class="dot"></span>旧模块与残留进程</h2>
+    <div class="list" id="listOld"></div>
+    <div class="hint">修复会停掉残留看门狗/守护进程，并把旧优化模块目录隔离到 quarantine/（备份数据保留，可找回）。</div>
+  </div>
+
+  <!-- 操作 -->
+  <div class="btns">
+    <button class="btn ghost" id="btnScan" onclick="doScan()">开始体检</button>
+    <button class="btn primary" id="btnFix" onclick="doRepair()" disabled>一键修复</button>
+  </div>
+  <div class="console" id="console"><pre id="consoleTxt"></pre></div>
+
+  <footer>修复完成后请重启一次，让 hosts / 属性 / HyperBoost 彻底复位<br>本模块不修改任何系统状态，卸载即净</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const MODDIR = "/data/adb/modules/zzz-coloros-doctor";
+const $ = id => document.getElementById(id);
+let lastScan = null, scanDone = false;
+
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
+
+/* ---- 命令桥：KernelSU / APatch / Magisk 通用 ---- */
+function exec(cmd){
+  return new Promise(resolve=>{
+    if(typeof ksu!=="undefined" && typeof ksu.exec==="function"){
+      try{
+        const r = ksu.exec(cmd);
+        if(r && typeof r.then==="function") r.then(v=>resolve(norm(v))).catch(e=>resolve({errno:1,stdout:"",stderr:String(e)}));
+        else resolve(norm(r));
+        return;
+      }catch(e){ resolve({errno:1,stdout:"",stderr:String(e)}); return; }
+    }
+    resolve({errno:127,stdout:"",stderr:"NO_BRIDGE"});
+  });
+}
+function norm(r){
+  if(r==null) return {errno:1,stdout:"",stderr:"empty"};
+  if(typeof r==="string") return {errno:0,stdout:r,stderr:""};
+  return {errno:r.errno??0, stdout:r.stdout??"", stderr:r.stderr??""};
+}
+async function sh(sub){ return exec(`sh ${MODDIR}/action.sh ${sub}`); }
+
+/* ---- 渲染 ---- */
+function chip(ok,okTxt,badTxt){return `<span class="chip ${ok?"ok":"err"}">${ok?okTxt:badTxt}</span>`;}
+function setRing(score){
+  const c=2*Math.PI*64; const el=$("ring");
+  el.style.strokeDashoffset = c - c*score/100;
+  $("score").textContent = score;
+}
+function setCard(id,ok,okTxt,badTxt){const e=$(id);e.className="chip "+(ok?"ok":"err");e.textContent=ok?okTxt:badTxt;}
+function itemList(arr, render){
+  const el = arguments[2];
+}
+function fill(elId, items){
+  const box=$(elId);
+  if(!items || !items.length){ box.innerHTML = `<div class="item"><span class="nm" style="color:var(--tx2)">无异常 ✓</span></div>`; return; }
+  box.innerHTML = items.map(i=>`<div class="item"><span class="nm">${i.n}</span><span class="st">${i.s}</span></div>`).join("");
+}
+function jump(id){ const e=$(id); if(e.style.display!=="none") e.scrollIntoView({behavior:"smooth",block:"center"}); }
+
+/* ---- 体检 ---- */
+async function doScan(){
+  const b=$("btnScan"); b.disabled=true; b.innerHTML=`<span class="spin"></span>体检中…`;
+  $("scoreLabel").textContent="正在扫描，请稍候…";
+  const r = await sh("scan");
+  b.disabled=false; b.textContent="重新体检";
+  if(r.errno!==0 || !r.stdout.trim()){
+    if(r.stderr==="NO_BRIDGE"){ toast("请用 KernelSU / APatch 管理器打开 WebUI"); }
+    else toast("体检失败：" + (r.stderr||"未知错误").slice(0,60));
+    return;
+  }
+  let d; try{ d=JSON.parse(r.stdout.trim().split("\n").filter(l=>l.trim().startsWith("{")).join("")); }
+  catch(e){ toast("数据解析失败"); return; }
+  lastScan=d; scanDone=true;
+  setRing(d.score);
+  $("scoreLabel").textContent = d.score>=90?"系统状态良好":(d.score>=60?"发现问题，建议修复":"存在明显损伤，请立即修复");
+  $("ver").textContent = `v1.0 · ${d.root?"Root 权限正常":"⚠ 无 Root 权限"} · 自身零系统修改`;
+
+  // 分类卡
+  setCard("cApps", d.n_disabled==0 && d.game_pkgs.every(g=>g.state==="enabled"),
+          `${d.n_disabled} 个待恢复`, `${d.n_disabled} 个被禁用`);
+  const propsBad = !d.fingerprint_ok || !d.brand_ok || d.props_pending>0 || !d.anim_ok || !d.pdns_ok;
+  setCard("cProps", !propsBad, "干净", "有残留");
+  const netBad = d.n_hosts_extra>0 || d.n_frozen>0 || d.hosts_mounted;
+  setCard("cNet", !netBad, "干净", "有残留");
+  const oldBad = d.n_watchdogs>0 || d.old_modules.length>0 || !d.thermal_ok;
+  setCard("cOld", !oldBad, "干净", "有残留");
+
+  // 明细
+  fill("listApps",
+    d.disabled_pkgs.split(/\s+/).filter(Boolean).map(p=>({n:p,s:chip(false,"—","被禁用")}))
+    .concat((d.game_pkgs||[]).map(g=>({n:g.pkg+"（游戏助手/云控）",s:chip(g.state==="enabled","正常运行","被禁用")}))));
+  fill("listProps",[
+    {n:"设备指纹 ro.build.fingerprint",s:chip(d.fingerprint_ok,"出厂真值","被伪造/篡改")},
+    {n:"品牌信息 ro.product.brand",s:chip(d.brand_ok,"出厂真值","被篡改")},
+    {n:`备份清单待还原属性 ${d.props_pending} 项`,s:chip(d.props_pending==0,"无残留","待还原")},
+    {n:`动画缩放（窗口 ${d.anim.window} / 过渡 ${d.anim.transition} / 时长 ${d.anim.animator}）`,s:chip(d.anim_ok,"正常","被修改")},
+    {n:`Private DNS（${d.private_dns||"自动"}）`,s:chip(d.pdns_ok,"正常","被改过")}
+  ]);
+  const netItems=[
+    {n:`/system/etc/hosts 多余屏蔽条目 ${d.n_hosts_extra} 条`,s:chip(d.n_hosts_extra==0,"无","存在")},
+    {n:"模块 hosts 挂载覆盖",s:chip(!d.hosts_mounted,"无","生效中")}
+  ];
+  d.frozen && d.frozen.split(/\s+/).filter(Boolean).forEach(f=>netItems.push({n:"冷冻目录 "+f,s:chip(false,"—","冷冻中")}));
+  fill("listNet",netItems);
+  const oldItems=(d.old_modules||[]).map(m=>({n:`旧优化模块 ${m.name||m.id}`,s:chip(false,"—","未隔离")}))
+    .concat([{n:`残留看门狗/守护进程 ${d.n_watchdogs} 个`,s:chip(d.n_watchdogs==0,"无","存在")}])
+    .concat([{n:"温控/性能服务",s:chip(d.thermal_ok,"运行正常","被停止")}]);
+  fill("listOld",oldItems);
+
+  ["dApps","dProps","dNet","dOld"].forEach(i=>$(i).style.display="block");
+  $("btnFix").disabled=false;
+  toast("体检完成");
+}
+
+/* ---- 修复 ---- */
+async function doRepair(){
+  if(!scanDone){ toast("请先体检"); return; }
+  const b=$("btnFix"); b.disabled=true; b.innerHTML=`<span class="spin"></span>修复中…`;
+  const con=$("console"), txt=$("consoleTxt");
+  con.style.display="block"; txt.textContent="> 正在执行修复，请勿关闭页面…\n";
+  const r = await sh("repair");
+  if(r.errno!==0 && !r.stdout.trim()){
+    txt.textContent += "修复启动失败：" + r.stderr + "\n";
+    b.disabled=false; b.textContent="一键修复"; return;
+  }
+  const lines = (r.stdout||"").split("\n").filter(Boolean);
+  let result=null;
+  txt.textContent = lines.map(l=> l.startsWith("# ")? l.slice(2) : l).join("\n") + "\n";
+  const rl = lines.find(l=>l.startsWith("RESULT|"));
+  if(rl){ try{ result=JSON.parse(rl.slice(7)); }catch(e){} }
+  b.disabled=false; b.textContent="一键修复";
+  if(result){
+    toast(`修复完成 ✔ 成功 ${result.fixed} 项`);
+    txt.textContent += `\n>> 成功 ${result.fixed} 项 / 失败 ${result.failed} 项 / 恢复启用 ${result.enabled_pkgs} 个包 / 隔离模块 ${result.quarantined} 个\n>> 请立即重启一次彻底生效，重启后可再次体检验证。\n`;
+    setTimeout(doScan, 1200);
+  }
+}
+
+/* ---- 初始化 ---- */
+(async function init(){
+  const r = await sh("status");
+  if(r.errno===0){
+    try{ const d=JSON.parse(r.stdout.trim()); if(d.version) $("ver").textContent=`${d.version} · ${d.root?"Root 正常":"⚠ 无 Root"} · 自身零系统修改`; }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
