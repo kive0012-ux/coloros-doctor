@@ -17,17 +17,11 @@ for d in $(find_old_modules); do
   old_count=$((old_count+1))
 done
 
-# ---------- 2) 被禁用的包（排除出厂黑名单） ----------
+# ---------- 2) 被禁用的包（仅作信息展示，不计分不操作；游戏/云控包单独在第10节判定） ----------
 all_disabled=$(pm list packages -d 2>/dev/null | sed 's/^package://' | sort)
-bad_disabled=""
+bad_disabled="$all_disabled"
 n_disabled=0
-for p in $all_disabled; do
-  skip=0
-  for k in $KEEP_DISABLED; do [ "$p" = "$k" ] && skip=1; done
-  [ "$skip" = "1" ] && continue
-  if [ -z "$bad_disabled" ]; then bad_disabled="$p"; else bad_disabled="$bad_disabled $p"; fi
-  n_disabled=$((n_disabled+1))
-done
+for p in $all_disabled; do n_disabled=$((n_disabled+1)); done
 
 # ---------- 3) 属性残留（旧模块备份清单待还原条数） ----------
 props_pending=0
@@ -39,19 +33,30 @@ for d in $(find_old_modules); do
 done
 
 # ---------- 4) 指纹是否与出厂一致 ----------
-fp_ok=1
+fp_ok=1; fp_src="partition"
 fp_cur=$(getprop ro.build.fingerprint 2>/dev/null)
 fp_stock=$(get_stock_value ro.build.fingerprint 2>/dev/null)
-[ -n "$fp_stock" ] && [ "$fp_cur" != "$fp_stock" ] && fp_ok=0
+if [ -n "$fp_stock" ]; then
+  [ "$fp_cur" != "$fp_stock" ] && fp_ok=0
+else
+  # 分区无真值时退化为白名单校验：身份必须是一加 Ace3（OnePlus/PJE110）
+  fp_src="whitelist"
+  _b=$(getprop ro.product.brand 2>/dev/null); _m=$(getprop ro.product.model 2>/dev/null)
+  [ "$_b" != "$STOCK_ID_BRAND" ] && fp_ok=0
+  case "$_m" in "$STOCK_ID_MODEL"|*"Ace 3"*) ;; *) fp_ok=0 ;; esac
+fi
 brand_ok=1
-[ "$(getprop ro.product.brand 2>/dev/null)" != "$(get_stock_value ro.product.brand 2>/dev/null)" ] && brand_ok=0
+_sb=$(get_stock_value ro.product.brand 2>/dev/null)
+_cb=$(getprop ro.product.brand 2>/dev/null)
+if [ -n "$_sb" ]; then [ "$_cb" != "$_sb" ] && brand_ok=0
+else [ "$_cb" != "$STOCK_ID_BRAND" ] && brand_ok=0; fi
 
 # ---------- 5) 动画缩放 ----------
 aw=$(settings get global window_animation_scale 2>/dev/null)
 at=$(settings get global transition_animation_scale 2>/dev/null)
 ad=$(settings get global animator_duration_scale 2>/dev/null)
 anim_ok=1
-for v in "$aw" "$at" "$ad"; do [ "$v" = "1.0" ] || [ "$v" = "1" ] || anim_ok=0; done
+for v in "$aw" "$at" "$ad"; do [ "$v" = "null" ] && continue; [ "$v" = "1.0" ] || [ "$v" = "1" ] || anim_ok=0; done
 
 # ---------- 6) Private DNS ----------
 pdns=$(settings get global private_dns_mode 2>/dev/null)
@@ -60,7 +65,7 @@ pdns_ok=1
 
 # ---------- 7) hosts（真分区多余条目 + systemless 挂载） ----------
 hosts_extra=""
-[ -f /system/etc/hosts ] && hosts_extra=$(grep -vE '^#|^$|localhost' /system/etc/hosts 2>/dev/null | awk '{print $2}')
+[ -f /system/etc/hosts ] && hosts_extra=$(grep -vE '^#|^$|localhost' /system/etc/hosts 2>/dev/null | awk 'NF>1{print $2}')
 n_hosts=0
 [ -n "$hosts_extra" ] && n_hosts=$(echo $hosts_extra | wc -w)
 
@@ -105,7 +110,6 @@ done
 
 # ---------- 评分 ----------
 score=100
-[ "$n_disabled" -gt 0 ] 2>/dev/null && score=$((score - 30 - n_disabled))
 [ "$props_pending" -gt 0 ] 2>/dev/null && score=$((score - 10 - props_pending))
 [ "$fp_ok" = "0" ] && score=$((score - 15))
 [ "$brand_ok" = "0" ] && score=$((score - 5))
@@ -120,11 +124,13 @@ score=100
 
 cat > "$TMP" <<EOF
 {"ok":true,"root":$(is_root && echo true || echo false),
+"version":"$(jesc "$(grep -m1 '^version=' "$DOCDIR/module.prop" 2>/dev/null | cut -d= -f2-)")",
 "score":$score,
 "old_modules":[$old_json],
 "disabled_pkgs":"$(jesc "$bad_disabled")","n_disabled":$n_disabled,
 "props_pending":$props_pending,
 "fingerprint_ok":$( [ "$fp_ok" = "1" ] && echo true || echo false),
+"fp_src":"$fp_src","fp_cur":"$(jesc "$fp_cur")","fp_stock":"$(jesc "$fp_stock")",
 "brand_ok":$( [ "$brand_ok" = "1" ] && echo true || echo false),
 "anim_ok":$( [ "$anim_ok" = "1" ] && echo true || echo false),
 "pdns_ok":$( [ "$pdns_ok" = "1" ] && echo true || echo false),
