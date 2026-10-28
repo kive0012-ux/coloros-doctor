@@ -236,11 +236,11 @@ async function doScan(){
   lastScan=d; scanDone=true;
   setRing(d.score);
   $("scoreLabel").textContent = d.score>=90?"系统状态良好":(d.score>=60?"发现问题，建议修复":"存在明显损伤，请立即修复");
-  $("ver").textContent = `v1.0 · ${d.root?"Root 权限正常":"⚠ 无 Root 权限"} · 自身零系统修改`;
+  $("ver").textContent = `v${d.version||"1.0.2"} · ${d.root?"Root 权限正常":"⚠ 无 Root 权限"} · 自身零系统修改`;
 
   // 分类卡
-  setCard("cApps", d.n_disabled==0 && d.game_pkgs.every(g=>g.state==="enabled"),
-          `${d.n_disabled} 个待恢复`, `${d.n_disabled} 个被禁用`);
+  const gameBad=(d.game_pkgs||[]).some(g=>g.state!=="enabled");
+  setCard("cApps", !gameBad, "游戏组件正常", `${(d.game_pkgs||[]).filter(g=>g.state!=="enabled").length} 个被禁用`);
   const propsBad = !d.fingerprint_ok || !d.brand_ok || d.props_pending>0 || !d.anim_ok || !d.pdns_ok;
   setCard("cProps", !propsBad, "干净", "有残留");
   const netBad = d.n_hosts_extra>0 || d.n_frozen>0 || d.hosts_mounted;
@@ -250,10 +250,11 @@ async function doScan(){
 
   // 明细
   fill("listApps",
-    d.disabled_pkgs.split(/\s+/).filter(Boolean).map(p=>({n:p,s:chip(false,"—","被禁用")}))
-    .concat((d.game_pkgs||[]).map(g=>({n:g.pkg+"（游戏助手/云控）",s:chip(g.state==="enabled","正常运行","被禁用")}))));
+    (d.game_pkgs||[]).map(g=>({n:g.pkg+"（游戏助手/云控）",s:chip(g.state==="enabled","正常运行","被禁用")}))
+    .concat(d.disabled_pkgs.split(/\s+/).filter(Boolean).map(p=>({n:p,s:chip(true,"出厂/用户禁用·正常","")}))));
+  const fpShow=(d.fp_cur||"").slice(0,46);
   fill("listProps",[
-    {n:"设备指纹 ro.build.fingerprint",s:chip(d.fingerprint_ok,"出厂真值","被伪造/篡改")},
+    {n:"设备指纹"+(fpShow?`（当前 ${fpShow}${(d.fp_cur||"").length>46?"…":""}）`:""),s:chip(d.fingerprint_ok,d.fp_src==="whitelist"?"一加Ace3白名单":"出厂真值","被伪造/篡改")},
     {n:"品牌信息 ro.product.brand",s:chip(d.brand_ok,"出厂真值","被篡改")},
     {n:`备份清单待还原属性 ${d.props_pending} 项`,s:chip(d.props_pending==0,"无残留","待还原")},
     {n:`动画缩放（窗口 ${d.anim.window} / 过渡 ${d.anim.transition} / 时长 ${d.anim.animator}）`,s:chip(d.anim_ok,"正常","被修改")},
