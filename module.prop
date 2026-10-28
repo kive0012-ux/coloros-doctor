@@ -1,7 +1,7 @@
 id=zzz-coloros-doctor
 name=ColorOS 系统体检修复 · WebUI
-version=v1.0.1
-versionCode=2
+version=v1.0.2
+versionCode=3
 author=看见美女就想要
 description=系统体检与修复：找回被禁用的系统组件（游戏助手/云控框架/推送服务）、还原被注入的系统属性与伪造指纹、解冻被 bind-mount 冷冻的目录、恢复原版 hosts、停掉残留看门狗进程。只诊断修复、自身零系统修改，修复前逐项记录可回溯。兼容 KernelSU/APatch/Magisk。
 updateJson=https://raw.githubusercontent.com/kive0012-ux/coloros-doctor/main/update.json
