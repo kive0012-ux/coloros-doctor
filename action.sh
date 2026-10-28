@@ -30,6 +30,22 @@ case "$cmd" in
   log)
     cat "$REPLOG" 2>/dev/null || echo "(暂无修复日志)"
     ;;
+  fp)
+    echo "===== 设备指纹对照（当前 vs 分区出厂真值）====="
+    for k in $STOCK_PROP_KEYS; do
+      cur=$(getprop "$k" 2>/dev/null)
+      sv=$(get_stock_value "$k" 2>/dev/null)
+      if [ -n "$sv" ]; then
+        if [ "$cur" = "$sv" ]; then mark="OK"; else mark="DIFF"; fi
+        echo "[$mark] $k"
+        echo "      当前: ${cur:-(空)}"
+        echo "      出厂: $sv"
+      else
+        echo "[未知] $k（分区无出厂真值，不做改动）"
+        echo "      当前: ${cur:-(空)}"
+      fi
+    done
+    ;;
   *)
     echo '{"status":"error","msg":"未知命令"}'
     ;;
