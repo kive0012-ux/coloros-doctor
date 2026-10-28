@@ -6,7 +6,7 @@ MODPATH=${MODPATH:-/data/adb/modules/zzz-coloros-doctor}
 
 ui_print " "
 ui_print "********************************"
-ui_print "  ColorOS 系统体检修复 · v1.0"
+ui_print "  ColorOS 系统体检修复 · v1.0.2"
 ui_print "  本模块只诊断与修复，自身零系统修改"
 ui_print "********************************"
 
